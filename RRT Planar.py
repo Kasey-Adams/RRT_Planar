@@ -38,18 +38,20 @@ class Environment:
         collision = False
         lab = np.sqrt((bx - ax) ** 2 + (by - ay) ** 2)  # length of ray a-b
         # print(lab)
-        dx = (bx - ax) / lab  # x direction vector componenet
-        dy = (by - ay) / lab  # y direction vector componenet
-        for i in range(0, len(self.obstacle)):
-            cx = self.obstacle[i][0]  # x coordinate of obstacle center
-            cy = self.obstacle[i][1]  # y coordinate of obstacle center
-            cr = self.obstacle[i][2]  # radius of obstacle
-            t = dx * (cx - ax) + dy * (cy - ay)  # distance between point a and closest point to obstacle on ray
-            ex = t * dx + ax  # x coords for closest point to circle
-            ey = t * dy + ay  # y coords for closest point to circle
-            lec = np.sqrt((ex - cx) ** 2 + (ey - cy) ** 2)  # distance between e and obstacle center
-            if lec <= cr:
-                collision = True
+        if lab != 0:
+            dx = (bx - ax) / lab  # x direction vector componenet
+            dy = (by - ay) / lab  # y direction vector componenet
+            for i in range(0, len(self.obstacle)):
+                cx = self.obstacle[i][0]  # x coordinate of obstacle center
+                cy = self.obstacle[i][1]  # y coordinate of obstacle center
+                cr = self.obstacle[i][2]  # radius of obstacle
+                t = dx * (cx - ax) + dy * (cy - ay)  # distance between point a and closest point to obstacle on ray
+                ex = t * dx + ax  # x coords for closest point to circle
+                ey = t * dy + ay  # y coords for closest point to circle
+                lec = np.sqrt((ex - cx) ** 2 + (ey - cy) ** 2)  # distance between e and obstacle center
+                if lec <= cr:
+                    collision = True
+        #print(collision)
         return collision
 
     # checks if point is in goal
@@ -90,21 +92,21 @@ class RRT:
         n = self.number_of_nodes()
         self.add_node(n, x, y)
         nearest = self.near(n)
+        ncheckb = self.number_of_nodes()  # check nodes before
         self.step(nearest, n)
-        if not E.through_obstacle(self.x[nearest], self.x[n - 1], self.y[nearest], self.y[n - 1]):
-            self.add_edge(nearest, n)
-        else:
-            G.remove_node(n)
-            self.expand()
-        return [x, y, n]
+        nchecka = self.number_of_nodes()  # check if nodes were removed
+        #print(ncheckb, nchecka)
+        if nchecka != ncheckb:
+            return
+        self.add_edge(nearest, n)
 
     # find the nearest node
     def near(self, n):
         dmin = self.distance_between(0, n)
         # print(dmin)
         nearest = 0
-        for i in range(0, n):
-            #  print(self.distance_between(i, n))
+        for i in range(1, n):
+            # print(self.distance_between(i, n))
             #  print(dmin)
             if self.distance_between(i, n) < dmin:
                 dmin = self.distance_between(i, n)
@@ -116,18 +118,22 @@ class RRT:
     def step(self, near, new):
         d = self.distance_between(near, new)
         # print(d)
+        # print(d)
         if d > dmax:  # if the step size is too great, lower step size
-            theta = math.atan2(self.x[new] - self.x[near], self.y[new] - self.y[near])
+            theta = math.atan2(self.y[new] - self.y[near], self.x[new] - self.x[near])
             # print(theta)
             for i in range(0, 5):
-                (xn, yn) = (self.x[near] * theta * dmax * (5 - i) / 5, self.y[near] * theta * dmax * (5 - i) / 5)
-                if not E.in_obstacle(xn, yn):  # lower step size until new point not in obstacle
+                (xn, yn) = (
+                    self.x[new] * math.cos(theta) * dmax * (5 - i) / 5,
+                    self.y[new] * math.sin(theta) * dmax * (5 - i) / 5)
+                if E.in_obstacle(xn, yn) is not True and E.through_obstacle(self.x[near], xn, self.y[near], yn) is not True:
                     self.remove_node(new)
+                    # print(new,xn,yn)
                     self.add_node(new, xn, yn)
                     # print(self.distance_between(near,new))
                     return
             self.remove_node(new)
-            self.expand()
+            return
             # if no step can be found in the step direction, place node on top of nearest node to ensure
 
     def add_node(self, n, x, y):
@@ -175,9 +181,11 @@ class RRT:
 
     # draw tree
     def showtree(self, k):
+        print(len(self.x))
+        print(len(self.parent))
         for i in range(0, self.number_of_nodes()):
             par = self.parent[i]
-            plt.plot([self.x[i], self.x[par]], [self.y[i], self.y[par]], k, lw=0.5)
+            plt.plot([self.x[i], self.x[par]], [self.y[i], self.y[par]], k, lw=0.05)
 
     # draw path
     def showpath(self, k):
@@ -190,12 +198,12 @@ class RRT:
 # Global Variables
 
 # node limit
-nmax = 20
+nmax = 50000
 
 # goal region
 xg = 10
 yg = 0
-eg = .1
+eg = .25
 
 # simulation boundaries
 xmin = -5
@@ -204,7 +212,7 @@ ymin = -10
 ymax = 10
 
 # extend step size
-dmax = .1
+dmax = .5
 
 # start the root of the tree
 nstart = (0, 0)
@@ -248,8 +256,8 @@ def main():
             break
     plt.text(45, 103, 'Loops: %d' % (end + 1))
     G.goal_path()
-    print(G.x)
-    print(G.y)
+    # print(G.x)
+    # print(G.y)
     draw()
 
 
