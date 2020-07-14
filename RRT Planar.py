@@ -29,7 +29,7 @@ class Environment:
             cy = self.obstacle[i][1]  # y coordinate of obstacle center
             cr = self.obstacle[i][2]  # radius of obstacle
             acd = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-            if acd <= cr:
+            if acd <= cr + radius:
                 obs = True
         return obs
 
@@ -49,9 +49,9 @@ class Environment:
                 ex = t * dx + ax  # x coords for closest point to circle
                 ey = t * dy + ay  # y coords for closest point to circle
                 lec = np.sqrt((ex - cx) ** 2 + (ey - cy) ** 2)  # distance between e and obstacle center
-                if lec <= cr:
+                if lec <= (cr + radius):
                     collision = True
-        #print(collision)
+        # print(collision)
         return collision
 
     # checks if point is in goal
@@ -95,10 +95,13 @@ class RRT:
         ncheckb = self.number_of_nodes()  # check nodes before
         self.step(nearest, n)
         nchecka = self.number_of_nodes()  # check if nodes were removed
-        #print(ncheckb, nchecka)
+        # print(ncheckb, nchecka)
         if nchecka != ncheckb:
             return
-        self.add_edge(nearest, n)
+        if E.in_obstacle(self.x[n], self.y[n]) is not True:
+            self.add_edge(nearest, n)
+        else:
+            self.remove_node(n)
 
     # find the nearest node
     def near(self, n):
@@ -126,7 +129,8 @@ class RRT:
                 (xn, yn) = (
                     self.x[new] * math.cos(theta) * dmax * (5 - i) / 5,
                     self.y[new] * math.sin(theta) * dmax * (5 - i) / 5)
-                if E.in_obstacle(xn, yn) is not True and E.through_obstacle(self.x[near], xn, self.y[near], yn) is not True:
+                if E.in_obstacle(xn, yn) is not True and E.through_obstacle(self.x[near], xn, self.y[near],
+                                                                            yn) is not True:
                     self.remove_node(new)
                     # print(new,xn,yn)
                     self.add_node(new, xn, yn)
@@ -196,6 +200,7 @@ class RRT:
 
 
 # Global Variables
+radius = .5
 
 # node limit
 nmax = 50000
