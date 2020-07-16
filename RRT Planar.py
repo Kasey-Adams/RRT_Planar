@@ -3,6 +3,8 @@ import matplotlib.patches as patch
 import math
 import random
 import numpy as np
+from scipy.integrate import solve_ivp
+import time
 
 
 class Environment:
@@ -11,8 +13,8 @@ class Environment:
         # obstacle array of [x,y,r] arrays defining obstacles in teh simulation
         self.obstacle = obstacles
         # goal region
-        self.xg = xg
-        self.yg = yg
+        self.xg = goal[0]
+        self.yg = goal[2]
         self.eg = eg
 
         # simulation boundaries
@@ -34,25 +36,25 @@ class Environment:
         return obs
 
     # check if the path between two points goes through an obstacle
-    def through_obstacle(self, ax, bx, ay, by):
-        collision = False
-        lab = np.sqrt((bx - ax) ** 2 + (by - ay) ** 2)  # length of ray a-b
-        # print(lab)
-        if lab != 0:
-            dx = (bx - ax) / lab  # x direction vector componenet
-            dy = (by - ay) / lab  # y direction vector componenet
-            for i in range(0, len(self.obstacle)):
-                cx = self.obstacle[i][0]  # x coordinate of obstacle center
-                cy = self.obstacle[i][1]  # y coordinate of obstacle center
-                cr = self.obstacle[i][2]  # radius of obstacle
-                t = dx * (cx - ax) + dy * (cy - ay)  # distance between point a and closest point to obstacle on ray
-                ex = t * dx + ax  # x coords for closest point to circle
-                ey = t * dy + ay  # y coords for closest point to circle
-                lec = np.sqrt((ex - cx) ** 2 + (ey - cy) ** 2)  # distance between e and obstacle center
-                if lec <= (cr + radius):
-                    collision = True
-        # print(collision)
-        return collision
+    # def through_obstacle(self, ax, bx, ay, by):
+    #     collision = False
+    #     lab = np.sqrt((bx - ax) ** 2 + (by - ay) ** 2)  # length of ray a-b
+    #     # print(lab)
+    #     if lab != 0:
+    #         dx = (bx - ax) / lab  # x direction vector componenet
+    #         dy = (by - ay) / lab  # y direction vector componenet
+    #         for i in range(0, len(self.obstacle)):
+    #             cx = self.obstacle[i][0]  # x coordinate of obstacle center
+    #             cy = self.obstacle[i][1]  # y coordinate of obstacle center
+    #             cr = self.obstacle[i][2]  # radius of obstacle
+    #             t = dx * (cx - ax) + dy * (cy - ay)  # distance between point a and closest point to obstacle on ray
+    #             ex = t * dx + ax  # x coords for closest point to circle
+    #             ey = t * dy + ay  # y coords for closest point to circle
+    #             lec = np.sqrt((ex - cx) ** 2 + (ey - cy) ** 2)  # distance between e and obstacle center
+    #             if lec <= (cr + radius):
+    #                 collision = True
+    #     # print(collision)
+    #     return collision
 
     # checks if point is in goal
     def in_goal(self, x, y):
@@ -70,38 +72,70 @@ class Environment:
 class RRT:
     def __init__(self):
         # starting node
-        (xs, ys) = nstart
-        self.x = []
-        self.y = []
+        nstart = initial_position
+        self.state = [[], [], [], [], [], []]
         self.parent = []
-        self.x.append(xs)
-        self.y.append(ys)
+        self.state[0].append(nstart[0])
+        self.state[1].append(nstart[1])
+        self.state[2].append(nstart[2])
+        self.state[3].append(nstart[3])
+        self.state[4].append(nstart[4])
+        self.state[5].append(nstart[5])
+
+        self.time = []
         # first node is the only node whose parent is itself
         self.parent.append(0)
+        self.time.append(0)
+
         self.goalstate = None
         self.path = []
 
     def distance_between(self, n1, n2):
-        d = np.sqrt((self.x[n1] - self.x[n2]) ** 2 + (self.y[n1] - self.y[n2]) ** 2)
+        d = np.sqrt((self.state[0][n1] - self.state[0][n2]) ** 2 + (self.state[2][n1] - self.state[2][n2]) ** 2)
         return d
 
     # expand a random node and test if its valid, connect to nearest node if it is
     def expand(self):
-        x = random.uniform(xmin, xmax)
-        y = random.uniform(ymin, ymax)
+        x = np.zeros(6)
+        in_obs = False
+        while in_obs is not True:
+            x[0] = np.random.randn() * dmax + E.xg
+            x[1] = np.random.randn() * vel_var
+            x[2] = np.random.randn() * dmax + E.yg
+            x[3] = np.random.randn() * vel_var
+            x[4] = np.random.rand() * 2 * np.pi
+            x[5] = np.random.randn() * vel_var
+            in_obs = E.in_obstacle(x[0], x[2])
+        dt = np.random.rand()
         n = self.number_of_nodes()
-        self.add_node(n, x, y)
-        nearest = self.near(n)
-        ncheckb = self.number_of_nodes()  # check nodes before
-        self.step(nearest, n)
-        nchecka = self.number_of_nodes()  # check if nodes were removed
-        # print(ncheckb, nchecka)
-        if nchecka != ncheckb:
+        self.add_node(n, x)
+        #print(self.state)
+        n_nearest = self.near(n)
+        n_nearest = int(n_nearest)
+        x_nearest = []
+        for i in range(0,6):
+            x_nearest.append(self.state[i][n_nearest])
+        #print(x_nearest)
+        #print(x)
+        nearest_parent = self.parent[n_nearest]
+        #print(nearest_parent)
+        t_nearest = self.time[nearest_parent]
+        (x_new, u, col) = self.steer(x_nearest, x, t_nearest, t_nearest+dt)
+        #print(x_new)
+        self.remove_node(n)
+        if col is True:
             return
-        if E.in_obstacle(self.x[n], self.y[n]) is not True:
-            self.add_edge(nearest, n)
         else:
-            self.remove_node(n)
+            self.add_node(n, x_new)
+            self.add_edge(n_nearest,n)
+            self.time.insert(n, t_nearest+dt)
+
+        # ncheckb = self.number_of_nodes()  # check nodes before
+        # self.step(nearest, n)
+        # nchecka = self.number_of_nodes()  # check if nodes were removed
+        # # print(ncheckb, nchecka)
+        # if nchecka != ncheckb:
+        #     return
 
     # find the nearest node
     def near(self, n):
@@ -118,35 +152,35 @@ class RRT:
         return nearest
 
     # if step size is greater than maximum step size, scale down
-    def step(self, near, new):
-        d = self.distance_between(near, new)
-        # print(d)
-        # print(d)
-        if d > dmax:  # if the step size is too great, lower step size
-            theta = math.atan2(self.y[new] - self.y[near], self.x[new] - self.x[near])
-            # print(theta)
-            for i in range(0, 5):
-                (xn, yn) = (
-                    self.x[new] * math.cos(theta) * dmax * (5 - i) / 5,
-                    self.y[new] * math.sin(theta) * dmax * (5 - i) / 5)
-                if E.in_obstacle(xn, yn) is not True and E.through_obstacle(self.x[near], xn, self.y[near],
-                                                                            yn) is not True:
-                    self.remove_node(new)
-                    # print(new,xn,yn)
-                    self.add_node(new, xn, yn)
-                    # print(self.distance_between(near,new))
-                    return
-            self.remove_node(new)
-            return
-            # if no step can be found in the step direction, place node on top of nearest node to ensure
+    # def step(self, near, new):
+    #     d = self.distance_between(near, new)
+    #     # print(d)
+    #     # print(d)
+    #     if d > dmax:  # if the step size is too great, lower step size
+    #         theta = math.atan2(self.y[new] - self.y[near], self.x[new] - self.x[near])
+    #         # print(theta)
+    #         for i in range(0, 5):
+    #             (xn, yn) = (
+    #                 self.x[new] * math.cos(theta) * dmax * (5 - i) / 5,
+    #                 self.y[new] * math.sin(theta) * dmax * (5 - i) / 5)
+    #             if E.in_obstacle(xn, yn) is not True and E.through_obstacle(self.x[near], xn, self.y[near],
+    #                                                                         yn) is not True:
+    #                 self.remove_node(new)
+    #                 # print(new,xn,yn)
+    #                 self.add_node(new, xn, yn)
+    #                 # print(self.distance_between(near,new))
+    #                 return
+    #         self.remove_node(new)
+    #         return
+    #         # if no step can be found in the step direction, place node on top of nearest node to ensure
 
-    def add_node(self, n, x, y):
-        self.x.insert(n, x)
-        self.y.insert(n, y)
+    def add_node(self, n, x):
+        for i in range(0, 6):
+            self.state[i].insert(n, x[i])
 
     def remove_node(self, n):
-        self.x.pop(n)
-        self.y.pop(n)
+        for i in range(0, 6):
+            self.state[i].pop(n)
 
     def add_edge(self, parent, child):
         self.parent.insert(child, parent)
@@ -155,23 +189,27 @@ class RRT:
         self.parent.pop(n)
 
     def clear(self):
-        (x, y) = nstart
-        self.x = []
-        self.y = []
+        nstart = initial_position
+        self.state = [[], [], [], [], [], []]
         self.parent = []
-        self.x.append(x)
-        self.y.append(y)
+        self.state[0].append(nstart[0])
+        self.state[1].append(nstart[1])
+        self.state[2].append(nstart[2])
+        self.state[3].append(nstart[3])
+        self.state[4].append(nstart[4])
+        self.state[5].append(nstart[5])
+
         # first node is the only node whose parent is itself
         self.parent.append(0)
         self.goalstate = None
         self.path = []
 
     def number_of_nodes(self):
-        return len(self.x)
+        return len(self.state[0])
 
     def goal_path(self):
         for i in range(0, G.number_of_nodes()):
-            if E.in_goal(self.x[i], self.y[i]):
+            if E.in_goal(self.state[0][i], self.state[2][i]):
                 self.goalstate = i
                 break
         if self.goalstate is not None:
@@ -185,30 +223,104 @@ class RRT:
 
     # draw tree
     def showtree(self, k):
-        print(len(self.x))
+        print(len(self.state[0]))
         print(len(self.parent))
         for i in range(0, self.number_of_nodes()):
             par = self.parent[i]
-            plt.plot([self.x[i], self.x[par]], [self.y[i], self.y[par]], k, lw=0.05)
+            plt.plot([self.state[0][i], self.state[0][par]], [self.state[2][i], self.state[2][par]], k, lw=0.5)
 
     # draw path
     def showpath(self, k):
         for i in range(len(self.path) - 1):
             n1 = self.path[i]
             n2 = self.path[i + 1]
-            plt.plot([self.x[n1], self.x[n2]], [self.y[n1], self.y[n2]], k, lw=1, markersize=3)
+            plt.plot([self.state[0][n1], self.state[2][n2]], [self.state[0][n1], self.state[2][n2]], k, lw=2,
+                     markersize=3)
+
+    def steer(self, x0, x1, t0, tf):
+        n_samples = 50
+        u_candidates = []
+        x_candidates = []
+        col_list = []
+        for i in range(0,n_samples):
+            u_candidates.append([0,0])
+            x_candidates.append([0,0,0,0,0,0])
+            col_list.append(True)
+        #print(x_candidates)
+        x_free = []
+        u_free = []
+        for i in range(0, n_samples):
+            u_candidates[i] = self.sample_u()
+            x_candidates[i], col_list[i] = self.propegate_dynamics(x0, u_candidates[i], t0, tf)
+        for i in range(0,len(col_list)):
+            if col_list[i] is False:
+                x_free.append(x_candidates[i])
+                u_free.append(u_candidates[i])
+        if x_free == []:
+            return None, None, True
+        else:
+            nearest = 0
+            dist = np.sqrt((x_free[0][0] - x1[0]) ** 2 + (x_free[0][2] - x1[2]) ** 2)
+            for i in range(1, len(x_free)):
+                dist1 = np.sqrt((x_free[i][0] - x1[0])**2+(x_free[i][2] - x1[2])**2)
+                if dist1 < dist:
+                    dist = dist1
+                    nearest = i
+            x_new = x_free[nearest]
+            u_new = u_free[nearest]
+            return x_new, u_new, False
+
+    def sample_u(self):
+        u = np.zeros(2)
+        u[0] = np.random.rand()
+        u[1] = np.random.randn()
+        return u
+
+    def propegate_dynamics(self, x0, u, t0, tf):
+        def get_xdot(t, x):
+            xdot = np.array([x[1],
+                             u[0] * np.cos(x[4]),
+                             x[3],
+                             u[0] * np.sin(x[4]),
+                             x[5],
+                             u[1]])
+            return xdot
+
+        tsteps = []
+        for i in range(0, steps):
+            tsteps.append((tf - t0) * i / steps + t0)
+        #print(x0)
+        sol = solve_ivp(get_xdot, [t0, tf], x0, t_eval=tsteps)
+        xout = sol.y
+        xnew=[]
+        for i in range(0,6):
+            xnew.append(xout[i][-1])
+        collision = False
+        #print(xout)
+
+        for i in range(0,steps):
+            collision = E.in_obstacle(xout[0][i], xout[2][i])
+            if collision is True:
+                #print(i)
+                break
+
+        return xnew, collision
+
 
 
 # Global Variables
-radius = .5
+radius = .5  # radius of bot
 
 # node limit
-nmax = 50000
+nmax = 200000
+
+# integration steps
+steps = 100
 
 # goal region
-xg = 10
-yg = 0
-eg = .25
+initial_position = np.zeros(6)
+goal = np.array([10, 0, 0, 0, 0, 0])
+eg = 1
 
 # simulation boundaries
 xmin = -5
@@ -217,7 +329,10 @@ ymin = -10
 ymax = 10
 
 # extend step size
-dmax = .5
+dmax = 10
+
+# velocity variance
+vel_var = 2
 
 # start the root of the tree
 nstart = (0, 0)
@@ -229,7 +344,6 @@ obstacles = [[5, 0, 1]]
 G = RRT()
 
 # environment instance
-
 E = Environment()
 
 
@@ -238,7 +352,7 @@ def draw():
     fig, ax = plt.subplots()
     plt.plot([xmin, xmin, xmax, xmax, xmin], [ymin, ymax, ymax, ymin, ymin], color='k', lw=.5)
     # goal region
-    goal = plt.Circle((xg, yg), radius=eg, color='g')
+    goal = plt.Circle((E.xg, E.yg), radius=eg, color='g')
     ax.add_artist(goal)
     # draw tree
     G.showtree('0.45')
@@ -256,7 +370,7 @@ def main():
     end = nmax
     for i in range(0, nmax):
         G.expand()
-        if E.in_goal(G.x[-1], G.y[-1]):
+        if E.in_goal(G.state[0][-1], G.state[2][-1]):
             end = i
             break
     plt.text(45, 103, 'Loops: %d' % (end + 1))
