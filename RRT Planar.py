@@ -63,10 +63,10 @@ class Environment:
             return True
         return False
 
-    # def in_bounds(self, x, y):
-    #     if x < self.xmin or x > self.xmax or y < self.ymin or y > self.ymax:
-    #         return False
-    #     return True
+    def in_bounds(self, x, y):
+        if x < self.xmin or x > self.xmax or y < self.ymin or y > self.ymax:
+            return False
+        return True
 
 
 class RRT:
@@ -97,38 +97,40 @@ class RRT:
     # expand a random node and test if its valid, connect to nearest node if it is
     def expand(self):
         x = np.zeros(6)
-        in_obs = False
-        while in_obs is not True:
+        in_obs = True
+        while in_obs is True:
             x[0] = np.random.randn() * dmax + E.xg
             x[1] = np.random.randn() * vel_var
             x[2] = np.random.randn() * dmax + E.yg
             x[3] = np.random.randn() * vel_var
             x[4] = np.random.rand() * 2 * np.pi
             x[5] = np.random.randn() * vel_var
-            in_obs = E.in_obstacle(x[0], x[2])
+            if E.in_obstacle(x[0], x[2]) is False and E.in_bounds(x[0], x[2]) is True:
+                in_obs = False
+            # print(in_obs)
         dt = np.random.rand()
         n = self.number_of_nodes()
         self.add_node(n, x)
-        #print(self.state)
+        # print(self.state)
         n_nearest = self.near(n)
         n_nearest = int(n_nearest)
         x_nearest = []
-        for i in range(0,6):
+        for i in range(0, 6):
             x_nearest.append(self.state[i][n_nearest])
-        #print(x_nearest)
-        #print(x)
+        # print(x_nearest)
+        # print(x)
         nearest_parent = self.parent[n_nearest]
-        #print(nearest_parent)
+        # print(nearest_parent)
         t_nearest = self.time[nearest_parent]
-        (x_new, u, col) = self.steer(x_nearest, x, t_nearest, t_nearest+dt)
-        #print(x_new)
+        (x_new, u, col) = self.steer(x_nearest, x, t_nearest, t_nearest + dt)
+        # print(x_new)
         self.remove_node(n)
         if col is True:
             return
         else:
             self.add_node(n, x_new)
-            self.add_edge(n_nearest,n)
-            self.time.insert(n, t_nearest+dt)
+            self.add_edge(n_nearest, n)
+            self.time.insert(n, t_nearest + dt)
 
         # ncheckb = self.number_of_nodes()  # check nodes before
         # self.step(nearest, n)
@@ -207,52 +209,40 @@ class RRT:
     def number_of_nodes(self):
         return len(self.state[0])
 
-    def goal_path(self):
-        for i in range(0, G.number_of_nodes()):
-            if E.in_goal(self.state[0][i], self.state[2][i]):
-                self.goalstate = i
-                break
-        if self.goalstate is not None:
-            self.path.append(self.goalstate)
-            newpos = self.parent[self.goalstate]
-            while newpos != 0:
-                self.path.append(newpos)
-                newpos = self.parent[newpos]
-            self.path.append(0)
-            self.path.reverse()
-
     # draw tree
     def showtree(self, k):
-        print(len(self.state[0]))
-        print(len(self.parent))
+        # print(len(self.state[0]))
+        # print(len(self.parent))
         for i in range(0, self.number_of_nodes()):
             par = self.parent[i]
             plt.plot([self.state[0][i], self.state[0][par]], [self.state[2][i], self.state[2][par]], k, lw=0.5)
 
     # draw path
     def showpath(self, k):
-        for i in range(len(self.path) - 1):
-            n1 = self.path[i]
-            n2 = self.path[i + 1]
-            plt.plot([self.state[0][n1], self.state[2][n2]], [self.state[0][n1], self.state[2][n2]], k, lw=2,
-                     markersize=3)
+        current = self.number_of_nodes() - 1
+        parent = self.parent[current]
+        while parent >= 0:
+            plt.plot([self.state[0][current], self.state[0][parent]], [self.state[2][current], self.state[2][parent]],
+                     k, lw=2, markersize=3)
+            current = parent
+            parent = self.parent[current]
 
     def steer(self, x0, x1, t0, tf):
         n_samples = 50
         u_candidates = []
         x_candidates = []
         col_list = []
-        for i in range(0,n_samples):
-            u_candidates.append([0,0])
-            x_candidates.append([0,0,0,0,0,0])
+        for i in range(0, n_samples):
+            u_candidates.append([0, 0])
+            x_candidates.append([0, 0, 0, 0, 0, 0])
             col_list.append(True)
-        #print(x_candidates)
+        # print(x_candidates)
         x_free = []
         u_free = []
         for i in range(0, n_samples):
             u_candidates[i] = self.sample_u()
             x_candidates[i], col_list[i] = self.propegate_dynamics(x0, u_candidates[i], t0, tf)
-        for i in range(0,len(col_list)):
+        for i in range(0, len(col_list)):
             if col_list[i] is False:
                 x_free.append(x_candidates[i])
                 u_free.append(u_candidates[i])
@@ -262,7 +252,7 @@ class RRT:
             nearest = 0
             dist = np.sqrt((x_free[0][0] - x1[0]) ** 2 + (x_free[0][2] - x1[2]) ** 2)
             for i in range(1, len(x_free)):
-                dist1 = np.sqrt((x_free[i][0] - x1[0])**2+(x_free[i][2] - x1[2])**2)
+                dist1 = np.sqrt((x_free[i][0] - x1[0]) ** 2 + (x_free[i][2] - x1[2]) ** 2)
                 if dist1 < dist:
                     dist = dist1
                     nearest = i
@@ -289,38 +279,40 @@ class RRT:
         tsteps = []
         for i in range(0, steps):
             tsteps.append((tf - t0) * i / steps + t0)
-        #print(x0)
+        # print(x0)
         sol = solve_ivp(get_xdot, [t0, tf], x0, t_eval=tsteps)
         xout = sol.y
-        xnew=[]
-        for i in range(0,6):
+        xnew = []
+        for i in range(0, 6):
             xnew.append(xout[i][-1])
         collision = False
-        #print(xout)
+        # print(xout)
 
-        for i in range(0,steps):
-            collision = E.in_obstacle(xout[0][i], xout[2][i])
-            if collision is True:
-                #print(i)
+        for i in range(0, steps):
+            if E.in_obstacle(xout[0][i], xout[2][i]) is True or E.in_bounds(xout[0][i], xout[2][i]) is False:
+                collision = True
+                # print(i)
                 break
 
         return xnew, collision
-
 
 
 # Global Variables
 radius = .5  # radius of bot
 
 # node limit
-nmax = 200000
+nmax = 250000
+
+# goal tracker
+goalstate = nmax + 1
 
 # integration steps
-steps = 100
+steps = 6
 
 # goal region
 initial_position = np.zeros(6)
 goal = np.array([10, 0, 0, 0, 0, 0])
-eg = 1
+eg = .25
 
 # simulation boundaries
 xmin = -5
@@ -357,7 +349,8 @@ def draw():
     # draw tree
     G.showtree('0.45')
     # draw path
-    G.showpath('r-')
+    if goalstate < nmax + 1:
+        G.showpath('r-')
 
     # draw obstacles
     for obstacle in obstacles:
@@ -367,14 +360,14 @@ def draw():
 
 
 def main():
-    end = nmax
     for i in range(0, nmax):
         G.expand()
+        if i % 1000 == 0:
+            print(i)
         if E.in_goal(G.state[0][-1], G.state[2][-1]):
-            end = i
+            goalstate = i
             break
-    plt.text(45, 103, 'Loops: %d' % (end + 1))
-    G.goal_path()
+    plt.text(45, 103, 'Loops: %d' % (goalstate + 1))
     # print(G.x)
     # print(G.y)
     draw()
