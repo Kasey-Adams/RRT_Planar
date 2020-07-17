@@ -221,9 +221,9 @@ class RRT:
     def showpath(self, k):
         current = self.number_of_nodes() - 1
         parent = self.parent[current]
-        while parent >= 0:
+        while current != 0:
             plt.plot([self.state[0][current], self.state[0][parent]], [self.state[2][current], self.state[2][parent]],
-                     k, lw=2, markersize=3)
+                     k, lw=2)
             current = parent
             parent = self.parent[current]
 
@@ -293,6 +293,10 @@ class RRT:
                 collision = True
                 # print(i)
                 break
+            # if E.in_goal(xout[0][i], xout[2][i]):
+            #     for j in range(0, 6):
+            #         xnew[j] = xout[j][i]
+            #         break
 
         return xnew, collision
 
@@ -302,9 +306,6 @@ radius = .5  # radius of bot
 
 # node limit
 nmax = 250000
-
-# goal tracker
-goalstate = nmax + 1
 
 # integration steps
 steps = 6
@@ -326,9 +327,6 @@ dmax = 10
 # velocity variance
 vel_var = 2
 
-# start the root of the tree
-nstart = (0, 0)
-
 # obstacles
 obstacles = [[5, 0, 1]]
 
@@ -339,7 +337,7 @@ G = RRT()
 E = Environment()
 
 
-def draw():
+def draw(goalstate):
     # draw bounds
     fig, ax = plt.subplots()
     plt.plot([xmin, xmin, xmax, xmax, xmin], [ymin, ymax, ymax, ymin, ymin], color='k', lw=.5)
@@ -349,6 +347,7 @@ def draw():
     # draw tree
     G.showtree('0.45')
     # draw path
+    print(goalstate)
     if goalstate < nmax + 1:
         G.showpath('r-')
 
@@ -360,6 +359,7 @@ def draw():
 
 
 def main():
+    goalstate = nmax + 1
     for i in range(0, nmax):
         G.expand()
         if i % 1000 == 0:
@@ -370,7 +370,7 @@ def main():
     plt.text(45, 103, 'Loops: %d' % (goalstate + 1))
     # print(G.x)
     # print(G.y)
-    draw()
+    draw(goalstate)
 
 
 # run main when RRT is called
