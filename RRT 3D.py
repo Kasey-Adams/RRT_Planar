@@ -143,7 +143,11 @@ class RRT:
             self.add_node(n, x_new)
             self.add_edge(n_nearest, n)
             self.time.insert(n, t_nearest + dt)
-            self.dmax = np.linalg.norm(x_new - goal)
+            x_check = np.ma.array(x_new, mask=False)
+            x_check.mask[6] = True
+            x_check.mask[8] = True
+            x_check.mask[10] = True
+            self.dmax = np.linalg.norm(x_check.compressed() - goal)
 
         # ncheckb = self.number_of_nodes()  # check nodes before
         # self.step(nearest, n)
@@ -333,7 +337,7 @@ steps = 6
 
 # goal region
 initial_position = np.zeros(12)
-goal = np.array([10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+goal = np.array([10, 0, 0, 0, 0, 0, 0, 0, 0])
 eg = 0.25
 
 # simulation boundaries

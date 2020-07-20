@@ -133,7 +133,9 @@ class RRT:
             self.add_node(n, x_new)
             self.add_edge(n_nearest, n)
             self.time.insert(n, t_nearest + dt)
-            self.dmax = np.linalg.norm(x_new - goal)
+            x_check = np.ma.array(x_new, mask=False)
+            x_check.mask[4] = True
+            self.dmax = np.linalg.norm(x_check.compressed() - goal)
 
         # ncheckb = self.number_of_nodes()  # check nodes before
         # self.step(nearest, n)
