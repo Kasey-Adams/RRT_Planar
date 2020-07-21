@@ -317,7 +317,7 @@ steps = 6
 
 # goal region
 initial_position = np.zeros(6)
-goal = np.array([10, 0, 0, 0, 0, 0])
+goal = np.array([10, 0, 0, 0, 0])
 eg = .25
 
 # simulation boundaries
